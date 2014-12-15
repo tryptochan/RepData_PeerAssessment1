@@ -7,19 +7,92 @@ output:
 
 
 ## Loading and preprocessing the data
-
-
-
+```{r}
+unzip("activity.zip")
+activity <- read.csv('activity.csv')
+activity$datetime <- paste(activity$date, sprintf("%04s",activity$interval))
+activity$datetime <- strptime(activity$datetime, '%Y-%m-%d %H%M')
+activity$date <- as.Date(activity$date)
+```
 ## What is mean total number of steps taken per day?
+```{r}
+datesum <- aggregate(activity$steps, list(activity$date), sum, na.rm=T)
+hist(datesum$x, 15, xlab="Total steps per day",
+     main="Histogram of total steps each day")
+```
 
+Mean total number of steps taken per day.
+```{r}
+avg_day <- aggregate(list(mean=activity$steps), list(date=activity$date),
+                     mean, na.rm=T)
+avg_day
+```
 
+Median total number of steps taken per day.
+```{r}
+aggregate(list(median=activity$steps), list(date=activity$date),
+          median, na.rm=T)
+```
 
 ## What is the average daily activity pattern?
+```{r}
+avg_interval <- aggregate(list(mean=activity$steps),
+                          list(interval=activity$interval),
+                          mean, na.rm=T)
+plot(avg_interval$interval, avg_interval$mean, type="l",
+     xlab="Intervals", ylab="Average steps")
+```
 
-
+The interval that contains the maximum number of steps.
+```{r}
+max(avg_interval$mean)
+avg_interval$interval[avg_interval$mean==max(avg_interval$mean)]
+```
 
 ## Imputing missing values
-
-
+Number of missing values.
+```{r}
+sum(is.na(activity$steps))
+```
+New dataset, filling the NAs with average steps of the interval over all days.
+```{r}
+activity_fix <- activity
+for (i in 1:nrow(activity_fix)) {
+  if(is.na(activity_fix$steps[i])) {
+    idx <- i %% 288
+    if (idx == 0) idx <- 288
+    activity_fix$steps[i] <- avg_interval$mean[idx]
+  }
+}
+datesum_fix <- aggregate(activity_fix$steps, list(activity_fix$date),
+                        sum, na.rm=T)
+hist(datesum_fix$x, 15, xlab="Total steps per day",
+     main="Histogram of total steps each day")
+aggregate(list(mean=activity_fix$steps), list(date=activity_fix$date),
+          mean, na.rm=T)
+aggregate(list(median=activity_fix$steps), list(date=activity_fix$date),
+          median, na.rm=T)
+```
+In the histogram, by estimating missing values from averages of all days, the peak at zero is removed and distributed to other portions. The shape of other peaks has not changed much. Since the missing values tend to lack for the whole day, previous NAs or NaNs in mean and median are now replaced by  mean and median calculted with averged data over all the days.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+Create a factor column of weekday and weekend.
+```{r}
+activity_fix$weekday <- weekdays(activity_fix$date)
+activity_fix$weekday <- sapply(activity_fix$weekday, function(x) {
+  if (x %in% c("Saturday", "Sunday")) {
+      return("weekend")
+  } else {
+      return("weekday")
+  }
+})
+activity_fix$weekday <- as.factor(activity_fix$weekday)
+
+avg_inv_fix <- aggregate(list(mean=activity_fix$steps),
+                         list(interval=activity_fix$interval,
+                         weekday=activity_fix$weekday),
+                         mean, na.rm=T)
+library(lattice)
+xyplot(mean ~ interval | weekday, avg_inv_fix ,layout=c(1,2),
+       type="l", ylab="Number of steps")
+```
